@@ -1,0 +1,12 @@
+[package]
+name = "syntree"
+version = "0.1.0"
+repository = "https://github.com/pearcebasmanm/syntree"
+entrypoint = "src/lib.typ"
+authors = [
+  "Max Pearce Basman <https://github.com/pearcebasmanm>"
+]
+license = "MIT-0"
+description = "A library for producing syntax tree graphs."
+keywords = [ "syntax", "sentence", "tree" ]
+exclude = [ "manual.pdf", "manual.typ" ]
