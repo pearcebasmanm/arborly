@@ -187,7 +187,10 @@
     let (label, children) = node
     let mid = offset(node)
     let parent = id.map(str).join(",")
-    content((x + mid, y), pad(y: 0.5em, label), name: parent)
+    content((x + mid, y), name: parent, {
+      set text(bottom-edge: "descender")
+      pad(y: 0.5em, label)
+    })
 
     // vertical spacing calculations
     let y-diff = min-space-y
@@ -213,7 +216,10 @@
     } else {
       let child = parent + "-c"
       let child-y = if hug-bottom { -max-depth * min-space-y } else { y }
-      content((x + mid, child-y), pad(top: 0.5em, text(children, bottom-edge: "descender")), name: child)
+      content((x + mid, child-y), name: child, {
+        set text(bottom-edge: "descender")
+        pad(y: 0.5em, children)
+      })
       line(child, parent)
     }
   }
