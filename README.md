@@ -26,5 +26,11 @@ To use this package, simply add the following code to your document:
   )),
 ))
 
-#syntree.tree(min-slope: 0.2, label-alignment: "smart", tree)
+#syntree.tree(tree)
 ```
+
+For more details, see `docs/manual.pdf`
+
+## Feedback
+
+I'm neither a linguist nor a graphics programmer, so if you see room for improvement please make an issue.
