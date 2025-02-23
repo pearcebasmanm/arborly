@@ -1,20 +1,4 @@
-// ```example
-// #tree(("TP", (
-//   ("NP", (
-//     ("Adj", "Pink"),
-//     ("N", "Poodles"),
-//   )),
-//   ("VP", (
-//     ("V", "Prefer"),
-//     ("NP", (
-//       ("N", "Pudding"),
-//     )),
-//   )),
-// )))
-// ```
-
 /// A function which takes a hierarchy of syntax elements and displays a tree of them.
-///
 ///
 /// -> content
 #let tree(

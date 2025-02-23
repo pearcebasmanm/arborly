@@ -1,4 +1,4 @@
-# Syntree
+# Arborly
 
 A library for producing syntax tree graphs.
 
@@ -11,7 +11,7 @@ This package requires typst 0.13
 To use this package, simply add the following code to your document:
 
 ```typ
-#import "@preview/syntree:0.1.0"
+#import "@preview/arborly:0.1.0"
 
 #let tree = ("TP", (
   ("NP", (
@@ -26,7 +26,7 @@ To use this package, simply add the following code to your document:
   )),
 ))
 
-#syntree.tree(tree)
+#arborly.tree(tree)
 ```
 
 For more details, see `docs/manual.pdf`
