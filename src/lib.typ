@@ -46,25 +46,24 @@
 
   // Combined width a node and its children should take up
   let width(node) = {
-    if type(node) == str {
+    if type(node) != array {
       panic("You probably forgot a comma after a list starting with " + node + ", resulting in (("+node+", ...)) instead of (("+node+", ...),)")
     }
     let (label, children) = node
-    if type(children) == array {
-      children.map(width).sum()
+    let child-widths = if type(children) == array {
+      children.map(width).sum(default: 0)
       // TODO: replace this with a system that accounts for wide labels, like below. But that doesn't work since the label will be offset from the center...
       // calc.max(measure(label).width.cm() + min-gap-x, children.map(width).sum())
     } else {
-      float(measure(children).width.cm()) + min-gap-x
+      measure(children).width.cm() + min-gap-x
     }
+    calc.max(child-widths, measure(label).width.cm() + min-gap-x)
   }
 
   // What offset a label should have from the left extremity of its width in order to be in the halfway position from its children's extremities' labels
   let offset-mid(node) = {
     let (_, children) = node
-    if type(children) == str {
-      width(node) / 2
-    } else if type(children) == array {
+    if type(children) == array and children.len() > 0 {
       if children.len() == 1 {
         width(children.at(0)) / 2
       } else {
@@ -73,21 +72,19 @@
         (first-offset + last-offset) / 2
       }
     } else {
-      panic("invalid children")
+      width(node) / 2
     }
   }
 
   let offset-avg(node) = {
     let (_, children) = node
-    if type(children) == str {
-      width(node) / 2
-    } else if type(children) == array {
+    if type(children) == array and children.len() > 0 {
       let n = children.len()
       children.enumerate().map(((i, child)) => {
         offset-avg(child) + width(child) * (n - i - 1)
       }).sum() / n
     } else {
-      panic("invalid children")
+      width(node) / 2
     }
   }
 
@@ -95,9 +92,7 @@
   // if there are three elements, and the middle one is placed close enough to the midpoint, the label will snap to align with it
   let offset-smart(node) = {
     let (_, children) = node
-    if type(children) == str {
-      width(node) / 2
-    } else if type(children) == array {
+    if type(children) == array and children.len() > 0 {
         let n = children.len()
         let average = children.enumerate().map(((i, child)) => {
           offset-smart(child) + width(child) * (n - i - 1)
@@ -118,7 +113,7 @@
           average
         }
     } else {
-      panic("invalid children")
+      width(node) / 2
     }
   }
 
@@ -135,23 +130,25 @@
   // Largest horizontal distance from parent label to child label, used to ensure a minimum line slope when dynamic-row-space is true
   let max-dist-to-child(node) = {
     let (_, children) = node
-    if type(children) == str {
-      0
-    } else if type(children) == array {
+    if type(children) == array and children.len() > 0 {
       let left-dist = offset(node) - offset(children.first())
       let right-dist = width(node) - offset(node) - width(children.last()) + offset(children.last())
       calc.max(left-dist, right-dist)
+    } else {
+      0
     }
   }
 
   // Basic depth of tree checker
   let depth((_, children)) = {
-    if type(children) == str {
-      1
-    } else if type(children) == array {
-      calc.max(..children.map(depth)) + 1
+    if type(children) == array {
+      if children.len() == 0 {
+        0
+      } else {
+        calc.max(..children.map(depth)) + 1
+      }
     } else {
-      panic("invalid children")
+      1
     }
   }
 
