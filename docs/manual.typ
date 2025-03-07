@@ -1,6 +1,6 @@
 #import "@preview/mantys:1.0.0": *
 
-#import "../src/lib.typ" as arborly
+#import "/src/lib.typ" as arborly
 
 #show: mantys(
   name: "arborly",
