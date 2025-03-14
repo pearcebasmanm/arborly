@@ -4,7 +4,7 @@
 
 #show: mantys(
   name: "arborly",
-  version: "0.1.1",
+  version: "0.2.0",
   authors: (
     "Max Pearce Basman",
   ),
@@ -35,7 +35,7 @@
 
 Each node in the tree is an array of a label and a child node array, with the exception of terminal nodes, which contain content instead.
 
-Be aware that the trailing commas after lone children are _not_ optional, as otherwise they cause ```typc ("NP", (("N", "this")))``` to parse as ```typc ("NP", ("N", "this"))```.
+Be aware that the trailing commas after lone children are _not_ optional, as otherwise ```typc ("NP", (("N", "this")))``` parses as ```typc ("NP", ("N", "this"))```. See examples for more supported syntax.
 
 #example(```typ
 #let tree = ("TP", (
@@ -125,9 +125,61 @@ Note that I am not a linguist, so these analyses may be wrong.
   )),
 ))
 
-#arborly.tree(tree)
+#arborly.tree(tree, min-slope: 0.2)
 ```)
 
+== Math Nodes
+
+#example(```typ
+#let tree = ($S$, (
+  $a$,
+  ($S$, (
+    ($S$, (
+      $b$,
+      ($S$, $lambda$),
+      $a$,
+    )),
+    ($S$, (
+      $a$,
+      ($S$, $lambda$),
+      $b$,
+    )),
+  )),
+  $b$,
+))
+
+#arborly.tree(tree, min-slope: 0.5)
+```)
+
+== Content Nodes
+
+#example(```typ
+#let tree = (table(columns: 2, [1],[2]), (
+  ([*bold*], [_italics_]),
+  ($e^(pi i) = -1$, (
+    ([], ({}, none)),
+    ([Nested:], pad(-40%, scale(
+      50%,
+      reflow: true,
+      arborly.tree(([1], ([2], [3])))
+    ))),
+  )),
+  circle(radius: 0.5em),
+))
+
+#arborly.tree(tree, min-slope: 0.5, label-alignment: "smart")
+```)
+
+== Dense
+
+#example(```typ
+#let tree = ("1234", (
+  ("12", ("1", "2")),
+  ("34", ("3", "4")),
+))
+
+#arborly.tree(tree, min-gap-x: 0)
+```)
 
 == Long Sentence
 
