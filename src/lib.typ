@@ -75,7 +75,7 @@ let parse(body) = {
 }
 
 let propagate-style((body, children, style, ..rest), parent-style) = {
-  // update the parent-style for all children with inerited values
+  // update the parent-style for all children with inherited values
   if "inherit" in style.keys() {
     parent-style = merge-dictionary(parent-style, style.inherit)
     style.remove("inherit")
@@ -372,17 +372,17 @@ let draw(
 ///
 /// -> content
 let tree(
-  /// A root style dictionary that is inherited by all nodes. Any more specific configuration within the tree takes precendence.
+  /// A root style dictionary that is inherited by all nodes. Any more specific configuration within the tree takes precedence.
   ///
   /// -> dictionary
   style: (:),
-  /// Determines whether to use an algorithm which packs branches tighly, or gives each node a column of vertical space, such that nodes from another branch will never be under it.
+  /// Determines whether to use an algorithm which packs branches tightly, or gives each node a column of vertical space, such that nodes from another branch will never be under it./
   ///
   /// -> bool
   dense: true,
   /// If the height of a node's content differs from regular text by less than this amount, it will be vertically spaced as though it had the same height.
   ///
-  /// This is not useful if most nodes are significatly larger than simple text (eg. being surrounded by `rect`).
+  /// This is not useful if most nodes are significantly larger than simple text (eg. being surrounded by `rect`).
   ///
   /// -> length
   vertical-snapping-threshold: 2pt,
@@ -394,7 +394,7 @@ let tree(
   ///
   /// -> length
   horizontal-gap: 7mm,
-  /// A code block to be inserted into the cetz canvas after the syntax tree. It can be used for drawing arrows between nodes. Remember to name nodes using ```typ#a``` in order to reference them. See Styling and Arguments for more.
+  /// A code block to be inserted into the cetz canvas after the syntax tree. It can be used for drawing arrows between nodes. Remember to name nodes using ```typ #a``` in order to reference them. See Styling and Arguments for more.
   /// 
   code: none,
   /// The tree's structure denoted using bracket-enclosed values, as described in Building a Syntax Tree
