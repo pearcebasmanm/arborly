@@ -1,236 +1,428 @@
-/// A function which takes a hierarchy of syntax elements and displays a tree of them.
+/// Used for adding attributes to nodes. See the Styling and Attributes section for more details.
+#let a(..args) = metadata(("arborly-metadata", args.named()))
+
+#let tree = { 
+import "defaults.typ"
+import "@preview/cetz:0.3.4"
+import cetz.util: merge-dictionary
+
+let trim(list) = {
+  while list.len() >= 1 and list.at(0) in (parbreak(), [ ]) {
+    list = list.slice(1)
+  }
+  while list.len() >= 1 and list.at(list.len() - 1) == [ ] {
+    list = list.slice(0, list.len() - 1)
+  }
+  list
+}
+
+
+let parse-recursive(list) = {
+  // utility functions used only when parsing
+  let is-opening(content) = {
+    content == [[]].children.at(0)
+  }
+  let is-closing(content) = {
+    content == [[]].children.at(1)
+  }
+  let is-metadata(content) = {
+    content.func() == metadata and type(content.value) == array and content.value.len() == 2 and content.value.at(0) == "arborly-metadata"
+  }
+  
+  list = trim(list)
+  
+  let child-opener = list.position(is-opening)
+  
+  let (body-slice, children) = if child-opener == none {
+    (trim(list), ())
+  } else {
+    let body-slice = trim(list.slice(0, child-opener))
+    let children-slice = trim(list.slice(child-opener))
+    let children = ()
+    while children-slice.len() > 0 {
+      let child-closer = 0
+      let level = 1
+      while level > 0 {
+        child-closer += 1
+        if is-opening(children-slice.at(child-closer)) {
+          level += 1
+        }
+        if is-closing(children-slice.at(child-closer)) {
+          level -= 1
+        }
+      }
+      children.push(parse-recursive(children-slice.slice(1, child-closer)))
+      
+      children-slice = trim(children-slice.slice(child-closer + 1))
+    }
+    
+    (body-slice, children)
+  }
+
+  let style-metadata = body-slice.find(is-metadata)
+  let style = if style-metadata != none {
+    style-metadata.value.at(1)
+  } else {
+    (:)
+  }
+
+  (body: body-slice.sum(default: none), children: children, style: style)
+}
+
+
+let parse(body) = {
+  parse-recursive(body.at("children", default: (body,)))
+}
+
+let propagate-style((body, children, style, ..rest), parent-style) = {
+  // update the parent-style for all children with inerited values
+  if "inherit" in style.keys() {
+    parent-style = merge-dictionary(parent-style, style.inherit)
+    style.remove("inherit")
+  }
+  children = children.map(node => propagate-style(node, parent-style))
+
+  let fallback-style = merge-dictionary(defaults.default-style, parent-style)
+
+  style = merge-dictionary(fallback-style, style)
+
+  let body = {
+    set text(bottom-edge: "baseline")
+    set text(..style.text)
+    align(style.align-content, body) 
+  }
+
+  (
+    body: body,
+    children: children,
+    // Measurements cannot be taken before this point since styling can affect them
+    body-height: measure(body).height,
+    body-width: measure(body).width,
+    style: style,
+    // horizontal offset relative to the root. Gets updated but needs default.
+    offset: 0pt,
+    ..rest
+  )
+}
+
+let left-chunk((children, body-width)) = {
+  if children.len() == 0 {
+    body-width / 2
+  } else {
+    calc.max(body-width / 2, left-chunk(children.first()))
+  }
+} 
+
+let right-chunk((children, body-width)) = {
+  if children.len() == 0 {
+    body-width / 2
+  } else {
+    calc.max(body-width / 2, right-chunk(children.last()))
+  }
+} 
+
+let propagate-width((children, body-width, style, ..rest), horizontal-gap) = {
+  let children = children.map(node => propagate-width(node, horizontal-gap))
+  let child-width = children.map(node => node.width).sum(default: 0pt)
+  if children.len() > 1 {
+    child-width += (children.len() - 1) * horizontal-gap
+  }
+  let width = if style.align == right and children.len() >= 1 {
+    let right-chunk = right-chunk((children, body-width))
+    let left-chunk = calc.max(body-width / 2, child-width - right-chunk)
+    left-chunk + right-chunk
+  } else {
+    calc.max(body-width, child-width)
+  }
+  (
+    children: children,
+    width: width,
+    body-width: body-width,
+    style: style,
+    ..rest
+  )
+}
+
+// propagate a change to the offset of all children
+let propagate-offset((children, offset, ..rest), difference) = {
+  (
+    children: children.map(node => propagate-offset(node, difference)),
+    offset: offset + difference,
+    ..rest
+  )
+}
+
+let calculate-offset-average((children, width)) = {
+  let first-offset = children.first().offset-from-left
+  let last-offset = width - (children.last().width - children.last().offset-from-left)
+  (first-offset + last-offset) / 2
+}
+
+// Uses the align: right style, but is still an offset from the left edge to the center
+let calculate-offset-right((children, width, body-width)) = {
+  width - right-chunk((children, body-width))
+}
+
+let compute-offset-sparse(
+  (children, width, body-width, style, ..rest), 
+  horizontal-gap,
+) = {
+  if children.len() == 0 {
+    return (
+      children: children,
+      width: width,
+      body-width: body-width,
+      offset-from-left: body-width / 2,
+      style: style,
+      ..rest
+    )
+  }
+  
+  let children = children.map(node => compute-offset-sparse(node, horizontal-gap))
+  let child-width = children.map(node => node.width).sum(default: 0pt)
+  if children.len() > 1 {
+    child-width += (children.len() - 1) * horizontal-gap
+  }
+
+  let offset-from-left = if style.align == center {
+    calculate-offset-average((children: children, width: width, ..rest))
+  } else if style.align == left {
+    left-chunk((children: children, body-width: body-width, ..rest))
+  } else if style.align == right {
+    calculate-offset-right((children: children, width: width, body-width: body-width, ..rest))
+  } else {
+    panic("alignment not implemented: " + style.align)
+  }
+
+  let difference = if style.align == center {
+    -calc.min(offset-from-left, child-width / 2)
+  } else if style.align == left {
+    -calc.min(offset-from-left, left-chunk(children.first()))
+  } else if style.align == right {
+    -calc.max(offset-from-left, child-width - right-chunk(children.last()))
+  } else {
+    panic("alignment not implemented: " + style.align)
+  }
+
+  let new-children = ()
+  for child in children {
+    new-children.push(propagate-offset(child, difference + child.offset-from-left))
+    
+    difference += child.width + horizontal-gap
+  }
+  let children = new-children
+  
+  (
+    children: children,
+    width: width,
+    body-width: body-width,
+    offset-from-left: offset-from-left,
+    style: style,
+    ..rest
+  )
+}
+
+let pair-offset(left, right, horizontal-gap: none) = {
+  let left = (left,)
+  let right = (right,)
+  
+  let max-sep = 0pt
+  while left.len() > 0 and right.len() > 0 {
+    let sep = (left.last().body-width + right.first().body-width) / 2 + (left.last().offset - right.first().offset)
+    if sep > max-sep {
+      max-sep = sep
+    }
+    let new-left = ()
+    let new-right = ()
+    for node in left {
+      for child in node.children {
+        new-left.push(child)
+      }
+    }
+    for node in right {
+      for child in node.children {
+        new-right.push(child)
+      }
+    }
+    left = new-left
+    right = new-right
+  }
+  max-sep + horizontal-gap
+}
+
+let compute-offset-dense((children, style, ..rest), horizontal-gap) = {
+  let children = children.map(node => compute-offset-dense(node, horizontal-gap))
+  
+  let seps = ()
+  for (left, right) in children.windows(2) {
+    seps.push(pair-offset(left, right, horizontal-gap: horizontal-gap))
+  }
+  // NOTE: this is probably the heaviest section of code, being at least 4 layers of looping.
+  for n in range(3, children.len() + 1) {
+    for (i, window) in children.windows(n).enumerate() {
+      let current-sep = seps.slice(i, i + n - 1).sum()
+      let calculated-sep = pair-offset(window.first(), window.last())
+      if current-sep < calculated-sep {
+        let amortized-difference = (calculated-sep - current-sep) / (n - 1)
+        for j in range(i, i + n - 1) {
+          seps.at(j) += amortized-difference
+        }
+      }
+    }
+  }
+
+  let sep-sum = seps.sum(default: 0pt)
+
+  let difference = if style.align == left {
+    0pt
+  } else if style.align == right {
+    -sep-sum
+  } else {
+    -sep-sum/2
+  }
+
+  let new-children = ()
+  for i in range(children.len()) {
+    new-children.push(propagate-offset(children.at(i), difference))
+    if i < seps.len() {
+      difference += seps.at(i)
+    }
+  }
+  children = new-children
+  
+  (
+    children: children, 
+    style: style, 
+    ..rest
+  )
+}
+
+let draw(
+  (
+    body, 
+    children, 
+    offset,
+    style,
+    body-height,
+  ),
+  y: 0, 
+  name: "0",
+  vertical-snapping-threshold: none,
+  vertical-gap: none,
+) = {
+  let name = if style.name != none { style.name } else { name }
+  cetz.draw.content(
+    (offset.cm(), y), 
+    body,
+    padding: style.padding,
+    name: name,
+  )
+
+  for i in range(children.len()) {
+    let child = children.at(i)
+    
+    // Calculate the offset
+    let DEFAULT_HEIGHT = measure([dj]).height
+    let average-height = (body-height + child.body-height) / 2
+    let snapped-height = if calc.abs(DEFAULT_HEIGHT - average-height) <= vertical-snapping-threshold {
+      DEFAULT_HEIGHT
+    } else {
+      average-height
+    }
+
+    let line-style = merge-dictionary(style.child-lines, child.style.parent-line)
+    
+    let child-y = y - snapped-height.cm() - vertical-gap.cm()
+    let child-name = if child.style.name != none { child.style.name } else { name + "-" + str(i) }
+    
+    draw(
+      child, 
+      y: child-y, 
+      name: child-name,
+      vertical-snapping-threshold: vertical-snapping-threshold,
+      vertical-gap: vertical-gap,
+    )
+    if child.style.triangle {
+      cetz.draw.line(
+        (name: name, anchor: "south"), 
+        (name: child-name, anchor: "north-west"), 
+        (name: child-name, anchor: "north-east"), 
+        close: true,
+        ..line-style,
+      )
+    } else {
+      cetz.draw.line(
+        if style.child-anchor != none {
+          (name: name, anchor: style.child-anchor)
+        } else {          
+          name
+        },
+        if child.style.parent-anchor != none {
+          (name: child-name, anchor: child.style.parent-anchor)
+        } else {          
+          child-name
+        },
+        ..line-style
+      )
+    }
+  }
+}
+
+/// Generate a syntax tree
 ///
 /// -> content
-#let tree(
-  /// The root node of the syntax tree.
-  /// See the examples for its structure.
-  /// -> array
-  node, 
-  /// Draws all words at the bottom in a line, with stems extending down from their parent. It does not function correctly with a non-default min-slope.
+let tree(
+  /// A root style dictionary that is inherited by all nodes. Any more specific configuration within the tree takes precendence.
+  ///
+  /// -> dictionary
+  style: (:),
+  /// Determines whether to use an algorithm which packs branches tighly, or gives each node a column of vertical space, such that nodes from another branch will never be under it.
   ///
   /// -> bool
-  hug-bottom: false, 
-  /// The vertical separation of levels of the tree. It may be higher than this if min-slope is set.
+  dense: true,
+  /// If the height of a node's content differs from regular text by less than this amount, it will be vertically spaced as though it had the same height.
   ///
-  /// -> float
-  min-space-y: 1.0,
-  /// The minimum horizontal gap between terminal nodes, which applies even if they are not vertically aligned.
+  /// This is not useful if most nodes are significatly larger than simple text (eg. being surrounded by `rect`).
   ///
-  /// -> float
-  min-gap-x: 0.3,
-  /// Sets an approximate lower bound for the slope of the connecting lines. \
-  /// Setting it to a non-zero value will change the vertical spacing of the graph. \
-  /// 0.2 - 0.5 has worked well for me, but this can be any number.
+  /// -> length
+  vertical-snapping-threshold: 2pt,
+  /// The vertical gap between nodes
   ///
-  /// -> float
-  min-slope: 0.0,
-  /// To space tree layers by increments of min-space-y when using a min-slope.
-  /// This prevents layers from getting "out of sync" and having words that are slightly out of alignment with each other.
+  /// -> length
+  vertical-gap: 8mm,
+  /// The horizontal gap between nodes
   ///
-  /// -> bool
-  full-step-y: false,
-  /// This accepts one of three strings: "middle", "average", or "smart".
+  /// -> length
+  horizontal-gap: 7mm,
+  /// A code block to be inserted into the cetz canvas after the syntax tree. It can be used for drawing arrows between nodes. Remember to name nodes using ```typ#a``` in order to reference them. See Styling and Arguments for more.
+  /// 
+  code: none,
+  /// The tree's structure denoted using bracket-enclosed values, as described in Building a Syntax Tree
   ///
-  /// Middle places a parent label exactly between its outer children's labels (the ones furthest to the left and right)
-  ///
-  /// Average places it at the average of its children's horizontal positions, which can look better when there are many clumped close together and only one off to the side.
-  ///
-  /// Smart acts like average, but if there are three children and the second label is sufficiently close to the middle, the parent will "snap" to it.
-  ///
-  /// -> str
-  label-alignment: "middle",
+  /// -> content
+  body,
 ) = context {
-  /*
-  Utility functions
-  */
-
-  // Combined width a node and its children should take up
-  let width(node) = {
-    if type(node) == array {
-      let (label, children) = node
-      let child-widths = if type(children) == array {
-        children.map(width).sum(default: 0)
-      } else {
-        measure(children).width.cm() + min-gap-x
-      }
-      calc.max(child-widths, measure(label).width.cm() + min-gap-x)
-    } else {
-      measure(node).width.cm() + min-gap-x
-    }
-  }
-
-  // What offset a label should have from the left extremity of its width in order to be in the halfway position from its children's extremities' labels
-  let offset-mid(node) = {
-    if type(node) == array {
-      let (_, children) = node
-      if type(children) == array and children.len() > 0 {
-        if children.len() == 1 {
-          width(children.at(0)) / 2
-        } else {
-          let first-offset = offset-mid(children.first())
-          let last-offset = width(node) - (width(children.last()) - offset-mid(children.last()))
-          (first-offset + last-offset) / 2
-        }
-      } else {
-        width(node) / 2
-      }
-    } else {
-      width(node) / 2
-    }
-  }
-
-  let offset-avg(node) = {
-    if type(node) == array {
-      let (_, children) = node
-      if type(children) == array and children.len() > 0 {
-        let n = children.len()
-        children.enumerate().map(((i, child)) => {
-          offset-avg(child) + width(child) * (n - i - 1)
-        }).sum() / n
-      } else {
-        width(node) / 2
-      }
-    } else {
-      width(node) / 2
-    }
-  }
-
-  // Average offset of children, but with one exception:
-  // if there are three elements, and the middle one is placed close enough to the midpoint, the label will snap to align with it
-  let offset-smart(node) = {
-    if type(node) == array {
-      let (_, children) = node
-      if type(children) == array and children.len() > 0 {
-          let n = children.len()
-          let average = children.enumerate().map(((i, child)) => {
-            offset-smart(child) + width(child) * (n - i - 1)
-          }).sum() / n
-          if children.len() == 3 {
-            let (first, middle, last) = children
-            let first-offset = offset-smart(first)
-            let last-offset = width(node) - width(last) + offset-smart(last)
-            let middle-offset = (first-offset + last-offset) / 2
-            let middle-child-offset = width(children.first()) + offset-smart(children.at(1))
-            let gap = calc.abs(middle-offset - middle-child-offset)
-            if gap < 1 {
-              middle-child-offset
-            } else {
-              average
-            } 
-          } else {
-            average
-          }
-      } else {
-        width(node) / 2
-      }
-    } else {
-      width(node) / 2
-    }
-  }
-
-  let offset = if label-alignment == "middle" {
-    offset-mid
-  } else if label-alignment == "average" {
-    offset-avg
-  } else if label-alignment == "smart" {
-    offset-smart
-  } else {
-    panic("invalid label-alignment value: " + label-alignment)
-  }
-
-  // Largest horizontal distance from parent label to child label, used to ensure a minimum line slope when dynamic-row-space is true
-  let max-dist-to-child(node) = {
-    if type(node) == array {
-      let (_, children) = node
-      if type(children) == array and children.len() > 0 {
-        let left-dist = offset(node) - offset(children.first())
-        let right-dist = width(node) - offset(node) - width(children.last()) + offset(children.last())
-        calc.max(left-dist, right-dist)
-      } else {
-        0
-      }
-    } else {
-      0
-    }
-  }
-
-  // Basic depth of tree checker
-  let depth(node) = {
-    if type(node) == array {
-      let (_, children) = node
-      if type(children) == array {
-        if children.len() == 0 {
-          0
-        } else {
-          calc.max(..children.map(depth)) + 1
-        }
-      } else {
-        1
-      }
-    } else {
-      0
-    }
-  }
-
-  let max-depth = if hug-bottom { 
-    depth(node) 
-  } else {
-    none
-  }
-
-  // Drawing of the tree
-  import "@preview/cetz:0.3.2"
-  import cetz.draw: *
-  import cetz.vector: add
-  let tree-recursive(node, id: (0,), x: 0, y: 0) = {
-    let mid = offset(node)
-    if type(node) == array {
-      // set up for and display parent element
-      let parent-width = width(node)
-      let (label, children) = node
-      let parent = id.map(str).join(",")
-      content((x + mid, y), name: parent, {
-        set text(bottom-edge: "descender")
-        pad(y: 0.5em, label)
-      })
-
-      // vertical spacing calculations
-      let y-diff = min-space-y
-      if min-slope > 0 {
-        y-diff = calc.max(y-diff, max-dist-to-child(node) * min-slope + 0.8)
-      }
-      if full-step-y {
-        y-diff = calc.round(y-diff / min-space-y) * min-space-y
-      }
-      y -= y-diff
+  let node = parse(body)
+  let node = propagate-style(node, style)
+  let node = if dense {
+    let node = compute-offset-dense(node, horizontal-gap)
+    node
     
-      if type(children) == array {
-        let offset = 0
-        for (i, node) in children.enumerate() {
-          let wid = width(node)
-          let child-id = id
-          child-id.push(i)
-          let child = child-id.map(str).join(",")
-          tree-recursive(node, id: child-id, x: x, y: y)
-          line(parent + ".south", child + ".north")
-          x += wid
-        }
-      } else {
-        let child = parent + "-c"
-        let child-y = if hug-bottom { -max-depth * min-space-y } else { y }
-        content((x + mid, child-y), name: child, {
-          set text(bottom-edge: "descender")
-          pad(y: 0.5em, children)
-        })
-        line(child, parent)
-      }
-    } else {
-      let parent = id.map(str).join(",")
-      content((x + mid, y), name: parent, {
-        set text(bottom-edge: "descender")
-        pad(y: 0.5em, node)
-      })
-    }
+  } else {
+    let node = propagate-width(node, horizontal-gap)
+    let node = compute-offset-sparse(node, horizontal-gap)  
+    node
   }
-  cetz.canvas(tree-recursive(node))
+
+  cetz.canvas({
+    draw(
+      node, 
+      vertical-snapping-threshold: vertical-snapping-threshold,
+      vertical-gap: vertical-gap,
+    )
+    code
+  })
+}
+
+tree
 }
