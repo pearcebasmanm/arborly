@@ -79,7 +79,12 @@ let propagate-style((body, children, style, ..rest), parent-style) = {
     parent-style = merge-dictionary(parent-style, style.inherit)
     style.remove("inherit")
   }
-  children = children.map(node => propagate-style(node, parent-style))
+  let new-children = ()
+  for child in children {
+    new-children.push(propagate-style(child, parent-style))
+  }
+  children = new-children
+  // children = children.map(node => propagate-style(node, parent-style))
 
   let fallback-style = merge-dictionary(defaults.default-style, parent-style)
 
@@ -120,12 +125,17 @@ let right-chunk((children, body-width)) = {
   }
 } 
 
-let propagate-width((children, body-width, style, ..rest), horizontal-gap) = {
-  let children = children.map(node => propagate-width(node, horizontal-gap))
+let calc-child-width(children, horizontal-gap) = {
   let child-width = children.map(node => node.width).sum(default: 0pt)
   if children.len() > 1 {
     child-width += (children.len() - 1) * horizontal-gap
   }
+  child-width
+}
+
+let propagate-width((children, body-width, style, ..rest), horizontal-gap) = {
+  let children = children.map(node => propagate-width(node, horizontal-gap))
+  let child-width = calc-child-width(children, horizontal-gap)
   let width = if style.align == right and children.len() >= 1 {
     let right-chunk = right-chunk((children, body-width))
     let left-chunk = calc.max(body-width / 2, child-width - right-chunk)
@@ -144,16 +154,21 @@ let propagate-width((children, body-width, style, ..rest), horizontal-gap) = {
 
 // propagate a change to the offset of all children
 let propagate-offset((children, offset, ..rest), difference) = {
+  let new-children = ()
+  for child in children {
+    new-children.push(propagate-offset(child, difference))
+  }
+  children = new-children
   (
-    children: children.map(node => propagate-offset(node, difference)),
+    children: children,
     offset: offset + difference,
     ..rest
   )
 }
 
-let calculate-offset-average((children, width)) = {
+let calculate-offset-average((children, width), child-width) = {
   let first-offset = children.first().offset-from-left
-  let last-offset = width - (children.last().width - children.last().offset-from-left)
+  let last-offset = child-width - (children.last().width - children.last().offset-from-left)
   (first-offset + last-offset) / 2
 }
 
@@ -194,7 +209,12 @@ let compute-horizontal-offset(
   (children, style, body-width, ..rest),
   horizontal-gap
 ) = {
-  children = children.map(child => compute-horizontal-offset(child, horizontal-gap))
+  // children = children.map(child => compute-horizontal-offset(child, horizontal-gap))
+  let new-children = ()
+  for child in children {
+    new-children.push(compute-horizontal-offset(child, horizontal-gap))
+  }
+  children = new-children
 
   // unused in tight branch
   let width = 0pt
@@ -242,10 +262,7 @@ let compute-horizontal-offset(
     
   } else { // END OF IF, START OF ELSE
 
-    let child-width = children.map(node => node.width).sum(default: 0pt)
-    if children.len() > 1 {
-      child-width += (children.len() - 1) * horizontal-gap
-    }
+    let child-width = calc-child-width(children, horizontal-gap)
     width = if style.align == right and children.len() >= 1 {
       let right-chunk = right-chunk((children, body-width))
       let left-chunk = calc.max(body-width / 2, child-width - right-chunk)
@@ -265,27 +282,22 @@ let compute-horizontal-offset(
       )
     }
 
-    let child-width = children.map(node => node.width).sum(default: 0pt)
-    if children.len() > 1 {
-      child-width += (children.len() - 1) * horizontal-gap
-    }
-
     offset-from-left = if style.align == center {
-      calculate-offset-average((children: children, width: width, ..rest))
+      calculate-offset-average((children: children, width: width), child-width)
     } else if style.align == left {
-      left-chunk((children: children, body-width: body-width, ..rest))
+      left-chunk((children: children, body-width: body-width))
     } else if style.align == right {
-      calculate-offset-right((children: children, width: width, body-width: body-width, ..rest))
+      calculate-offset-right((children: children, width: width, body-width: body-width))
     } else {
       panic("alignment not implemented: " + style.align)
     }
 
     let difference = if style.align == center {
-      -calc.min(offset-from-left, child-width / 2)
+      -offset-from-left
     } else if style.align == left {
       -calc.min(offset-from-left, left-chunk(children.first()))
     } else if style.align == right {
-      -calc.max(offset-from-left, child-width - right-chunk(children.last()))
+      -calc.min(offset-from-left, child-width - right-chunk(children.last()))
     } else {
       panic("alignment not implemented: " + style.align)
     }
@@ -309,76 +321,90 @@ let compute-horizontal-offset(
   )
 }
 
+// This uses a non-recursive approach to get around the depth limit
+// for very deep trees, but as a consequence is harder to read.
 let draw(
-  (
-    body, 
-    children, 
-    offset,
-    style,
-    body-height,
-  ),
+  node,
   y: 0, 
   name: "0",
   vertical-snapping-threshold: none,
   vertical-gap: none,
 ) = {
-  let name = if style.name != none { style.name } else { name }
-  cetz.draw.content(
-    (offset.cm(), y), 
-    body,
-    padding: style.padding,
-    name: name,
-  )
+  let call-stack = ((node: node, y: y, name: name),)
+  // Line elements are collected here and shown at the end, because they rely on element names that do not exist until later iterations of the call loop.
+  let lines = ()
 
-  for i in range(children.len()) {
-    let child = children.at(i)
-    
-    // Calculate the offset
-    let DEFAULT_HEIGHT = measure([dj]).height
-    let average-height = (body-height + child.body-height) / 2
-    let snapped-height = if calc.abs(DEFAULT_HEIGHT - average-height) <= vertical-snapping-threshold {
-      DEFAULT_HEIGHT
-    } else {
-      average-height
-    }
+  while call-stack.len() > 0 {
+    let (node: node, y: y, name: name) = call-stack.pop()
+    let (
+      body, 
+      children, 
+      offset,
+      style,
+      offset-from-left,
+      body-height,
+    ) = node
 
-    let line-style = merge-dictionary(style.child-lines, child.style.parent-line)
-    
-    let child-y = y - snapped-height.cm() - vertical-gap.cm()
-    // let child-y = y - snapped-height.cm()
-    let child-name = if child.style.name != none { child.style.name } else { name + "-" + str(i) }
-    
-    draw(
-      child, 
-      y: child-y, 
-      name: child-name,
-      vertical-snapping-threshold: vertical-snapping-threshold,
-      vertical-gap: vertical-gap,
+    // START OF ACTUAL IMPLEMENTATION
+    let name = if style.name != none { style.name } else { name }
+    cetz.draw.content(
+      (offset.cm(), y), 
+      body,
+      padding: style.padding,
+      name: name,
     )
-    if child.style.triangle {
-      cetz.draw.line(
-        (name: name, anchor: "south"), 
-        (name: child-name, anchor: "north-west"), 
-        (name: child-name, anchor: "north-east"), 
-        close: true,
-        ..line-style,
-      )
-    } else {
-      cetz.draw.line(
-        if style.child-anchor != none {
-          (name: name, anchor: style.child-anchor)
-        } else {          
-          name
-        },
-        if child.style.parent-anchor != none {
-          (name: child-name, anchor: child.style.parent-anchor)
-        } else {          
-          child-name
-        },
-        ..line-style
-      )
+
+    for i in range(children.len()) {
+      let child = children.at(i)
+    
+      // Calculate the offset
+      let DEFAULT_HEIGHT = measure([dj]).height
+      let average-height = (body-height + child.body-height) / 2
+      let snapped-height = if calc.abs(DEFAULT_HEIGHT - average-height) <= vertical-snapping-threshold {
+        DEFAULT_HEIGHT
+      } else {
+        average-height
+      }
+
+      let line-style = merge-dictionary(style.child-lines, child.style.parent-line)
+    
+      let child-y = y - snapped-height.cm() - vertical-gap.cm()
+      // let child-y = y - snapped-height.cm()
+      let child-name = if child.style.name != none { child.style.name } else { name + "-" + str(i) }
+    
+      call-stack.push((
+        node: child,
+        y: child-y,
+        name: child-name
+      ))
+      if child.style.triangle {
+        lines.push(cetz.draw.line(
+          (name: name, anchor: "south"), 
+          (name: child-name, anchor: "north-west"), 
+          (name: child-name, anchor: "north-east"), 
+          close: true,
+          ..line-style,
+        ))
+      } else {
+        lines.push(cetz.draw.line(
+          if style.child-anchor != none {
+            (name: name, anchor: style.child-anchor)
+          } else {          
+            name
+          },
+          if child.style.parent-anchor != none {
+            (name: child-name, anchor: child.style.parent-anchor)
+          } else {          
+            child-name
+          },
+          ..line-style
+        ))
+      }
     }
+    // END OF ACTUAL IMPLEMENTATION
   }
+
+  lines.join()
 }
 
 /// Generate a syntax tree
@@ -399,7 +425,6 @@ let tree(
   ///
   /// -> length
   vertical-gap: 8mm,
-  dense: true,
   /// The horizontal gap between nodes
   ///
   /// -> length
@@ -414,17 +439,7 @@ let tree(
 ) = context {
   let node = parse(body)
   let node = propagate-style(node, style)
-
   let node = compute-horizontal-offset(node, horizontal-gap)  
-  // let node = if dense {
-  //   let node = compute-offset-dense(node, horizontal-gap)
-  //   node
-    
-  // } else {
-  //   let node = propagate-width(node, horizontal-gap)
-  //   let node = compute-offset-sparse(node, horizontal-gap)  
-  //   node
-  // }
 
   cetz.canvas({
     draw(

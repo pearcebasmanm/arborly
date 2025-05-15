@@ -238,6 +238,38 @@ This is used as the name for cetz.draw.content if it is set to a non-```typc non
 ]
 ```)
 
+=== Fit
+
+This determines which horizontal positional algorithm is used. The default is ```typc "tight"```, which allows nodes to hang over other nodes for more compact spacing. This is valuable for larger syntax trees which otherwise get very spread out.
+
+Currently the only other style is ```typc "band"```, in which each node has nothing under it (other than its children of course).
+
+It's even possible to use multiple fits in one tree, as in the third case. But be careful as there may be malfunctioning edge cases I haven't found.
+
+#example(```typ
+#grid(gutter: 1em, columns: 3,
+  ..("tight", "band").map(fit => {
+    tree(style: (fit: fit))[A
+      [B]
+      [C [D] [E] [F]]
+    ]
+  }),
+  tree[A
+    [B]
+    [C #a(inherit: (fit: "band"))
+      [D]
+      [E
+        [F] [G] [H #a(inherit: (fit: "tight"))
+          [I]
+          [J]
+          [K]
+        ]
+      ]
+    ]
+  ]
+)
+```)
+
 = Examples
 
 Note that I am not a linguist, so these analyses may be wrong. There are intended to show the appearance of arborly syntax trees. Please create a github issue if you see a mistake, or would like to submit another example.
@@ -370,7 +402,10 @@ Note that I am not a linguist, so these analyses may be wrong. There are intende
 
 == Deep Sentence
 
-
+As of writing the node depth limit is 61, but this is reduced the deeper the call stack where you use the tree function.
 #example(```typ
-#tree(style: (padding: 0.01), vertical-gap: 0.1cm)[1[2[3[4[5[6[7[8[9[10[11[12[13[14[15[16[17[18[19[20[21[22[23[24[25]]]]]]]]]]]]]]]]]]]]]]]]]
+#tree(style: (padding: 0.0), vertical-gap: 0.05cm)[1[2[3[4[5[6[7[8[9
+[10[11[12[13[14[15[16[17[18[19[20[21[22[23[24[25[26[27[28[29[30[31[32
+[33[34[35[36[37[38[39[40[41[42[43[44[45[46[47[48[49]]]]]]]]]]]]]]]]]]
+]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
 ```)
