@@ -69,7 +69,6 @@ let parse-recursive(list) = {
   (body: body-slice.sum(default: none), children: children, style: style)
 }
 
-
 let parse(body) = {
   parse-recursive(body.at("children", default: (body,)))
 }
@@ -163,65 +162,6 @@ let calculate-offset-right((children, width, body-width)) = {
   width - right-chunk((children, body-width))
 }
 
-let compute-offset-sparse(
-  (children, width, body-width, style, ..rest), 
-  horizontal-gap,
-) = {
-  if children.len() == 0 {
-    return (
-      children: children,
-      width: width,
-      body-width: body-width,
-      offset-from-left: body-width / 2,
-      style: style,
-      ..rest
-    )
-  }
-  
-  let children = children.map(node => compute-offset-sparse(node, horizontal-gap))
-  let child-width = children.map(node => node.width).sum(default: 0pt)
-  if children.len() > 1 {
-    child-width += (children.len() - 1) * horizontal-gap
-  }
-
-  let offset-from-left = if style.align == center {
-    calculate-offset-average((children: children, width: width, ..rest))
-  } else if style.align == left {
-    left-chunk((children: children, body-width: body-width, ..rest))
-  } else if style.align == right {
-    calculate-offset-right((children: children, width: width, body-width: body-width, ..rest))
-  } else {
-    panic("alignment not implemented: " + style.align)
-  }
-
-  let difference = if style.align == center {
-    -calc.min(offset-from-left, child-width / 2)
-  } else if style.align == left {
-    -calc.min(offset-from-left, left-chunk(children.first()))
-  } else if style.align == right {
-    -calc.max(offset-from-left, child-width - right-chunk(children.last()))
-  } else {
-    panic("alignment not implemented: " + style.align)
-  }
-
-  let new-children = ()
-  for child in children {
-    new-children.push(propagate-offset(child, difference + child.offset-from-left))
-    
-    difference += child.width + horizontal-gap
-  }
-  let children = new-children
-  
-  (
-    children: children,
-    width: width,
-    body-width: body-width,
-    offset-from-left: offset-from-left,
-    style: style,
-    ..rest
-  )
-}
-
 let pair-offset(left, right, horizontal-gap: none) = {
   let left = (left,)
   let right = (right,)
@@ -250,49 +190,121 @@ let pair-offset(left, right, horizontal-gap: none) = {
   max-sep + horizontal-gap
 }
 
-let compute-offset-dense((children, style, ..rest), horizontal-gap) = {
-  let children = children.map(node => compute-offset-dense(node, horizontal-gap))
+let compute-horizontal-offset(
+  (children, style, body-width, ..rest),
+  horizontal-gap
+) = {
+  children = children.map(child => compute-horizontal-offset(child, horizontal-gap))
+
+  // unused in tight branch
+  let width = 0pt
+  let offset-from-left = 0pt;
+
   
-  let seps = ()
-  for (left, right) in children.windows(2) {
-    seps.push(pair-offset(left, right, horizontal-gap: horizontal-gap))
-  }
-  // NOTE: this is probably the heaviest section of code, being at least 4 layers of looping.
-  for n in range(3, children.len() + 1) {
-    for (i, window) in children.windows(n).enumerate() {
-      let current-sep = seps.slice(i, i + n - 1).sum()
-      let calculated-sep = pair-offset(window.first(), window.last())
-      if current-sep < calculated-sep {
-        let amortized-difference = (calculated-sep - current-sep) / (n - 1)
-        for j in range(i, i + n - 1) {
-          seps.at(j) += amortized-difference
+  if style.fit == "tight" { // START OF IF
+
+    let seps = ()
+    for (left, right) in children.windows(2) {
+      seps.push(pair-offset(left, right, horizontal-gap: horizontal-gap))
+    }
+    // NOTE: this is probably the heaviest section of code, being at least 4 layers of looping.
+    for n in range(3, children.len() + 1) {
+      for (i, window) in children.windows(n).enumerate() {
+        let current-sep = seps.slice(i, i + n - 1).sum()
+        let calculated-sep = pair-offset(window.first(), window.last())
+        if current-sep < calculated-sep {
+          let amortized-difference = (calculated-sep - current-sep) / (n - 1)
+          for j in range(i, i + n - 1) {
+            seps.at(j) += amortized-difference
+          }
         }
       }
     }
-  }
 
-  let sep-sum = seps.sum(default: 0pt)
+    let sep-sum = seps.sum(default: 0pt)
 
-  let difference = if style.align == left {
-    0pt
-  } else if style.align == right {
-    -sep-sum
-  } else {
-    -sep-sum/2
-  }
-
-  let new-children = ()
-  for i in range(children.len()) {
-    new-children.push(propagate-offset(children.at(i), difference))
-    if i < seps.len() {
-      difference += seps.at(i)
+    let difference = if style.align == left {
+      0pt
+    } else if style.align == right {
+      -sep-sum
+    } else {
+      -sep-sum/2
     }
-  }
-  children = new-children
-  
+
+    let new-children = ()
+    for i in range(children.len()) {
+      new-children.push(propagate-offset(children.at(i), difference))
+      if i < seps.len() {
+        difference += seps.at(i)
+      }
+    }
+    children = new-children
+    
+  } else { // END OF IF, START OF ELSE
+
+    let child-width = children.map(node => node.width).sum(default: 0pt)
+    if children.len() > 1 {
+      child-width += (children.len() - 1) * horizontal-gap
+    }
+    width = if style.align == right and children.len() >= 1 {
+      let right-chunk = right-chunk((children, body-width))
+      let left-chunk = calc.max(body-width / 2, child-width - right-chunk)
+      left-chunk + right-chunk
+    } else {
+      calc.max(body-width, child-width)
+    }
+      
+    if children.len() == 0 {
+      return (
+        children: children,
+        width: width,
+        body-width: body-width,
+        offset-from-left: body-width / 2,
+        style: style,
+        ..rest
+      )
+    }
+
+    let child-width = children.map(node => node.width).sum(default: 0pt)
+    if children.len() > 1 {
+      child-width += (children.len() - 1) * horizontal-gap
+    }
+
+    offset-from-left = if style.align == center {
+      calculate-offset-average((children: children, width: width, ..rest))
+    } else if style.align == left {
+      left-chunk((children: children, body-width: body-width, ..rest))
+    } else if style.align == right {
+      calculate-offset-right((children: children, width: width, body-width: body-width, ..rest))
+    } else {
+      panic("alignment not implemented: " + style.align)
+    }
+
+    let difference = if style.align == center {
+      -calc.min(offset-from-left, child-width / 2)
+    } else if style.align == left {
+      -calc.min(offset-from-left, left-chunk(children.first()))
+    } else if style.align == right {
+      -calc.max(offset-from-left, child-width - right-chunk(children.last()))
+    } else {
+      panic("alignment not implemented: " + style.align)
+    }
+
+    let new-children = ()
+    for child in children {
+      new-children.push(propagate-offset(child, difference + child.offset-from-left))
+      difference += child.width + horizontal-gap
+    }
+    children = new-children
+
+  } // END OF ELSE
+
   (
-    children: children, 
-    style: style, 
+    children: children,
+    body-width: body-width,
+    width: width,
+    style: style,
+    offset-from-left: offset-from-left,
     ..rest
   )
 }
@@ -333,6 +345,7 @@ let draw(
     let line-style = merge-dictionary(style.child-lines, child.style.parent-line)
     
     let child-y = y - snapped-height.cm() - vertical-gap.cm()
+    // let child-y = y - snapped-height.cm()
     let child-name = if child.style.name != none { child.style.name } else { name + "-" + str(i) }
     
     draw(
@@ -376,10 +389,6 @@ let tree(
   ///
   /// -> dictionary
   style: (:),
-  /// Determines whether to use an algorithm which packs branches tightly, or gives each node a column of vertical space, such that nodes from another branch will never be under it./
-  ///
-  /// -> bool
-  dense: true,
   /// If the height of a node's content differs from regular text by less than this amount, it will be vertically spaced as though it had the same height.
   ///
   /// This is not useful if most nodes are significantly larger than simple text (eg. being surrounded by `rect`).
@@ -390,6 +399,7 @@ let tree(
   ///
   /// -> length
   vertical-gap: 8mm,
+  dense: true,
   /// The horizontal gap between nodes
   ///
   /// -> length
@@ -404,15 +414,17 @@ let tree(
 ) = context {
   let node = parse(body)
   let node = propagate-style(node, style)
-  let node = if dense {
-    let node = compute-offset-dense(node, horizontal-gap)
-    node
+
+  let node = compute-horizontal-offset(node, horizontal-gap)  
+  // let node = if dense {
+  //   let node = compute-offset-dense(node, horizontal-gap)
+  //   node
     
-  } else {
-    let node = propagate-width(node, horizontal-gap)
-    let node = compute-offset-sparse(node, horizontal-gap)  
-    node
-  }
+  // } else {
+  //   let node = propagate-width(node, horizontal-gap)
+  //   let node = compute-offset-sparse(node, horizontal-gap)  
+  //   node
+  // }
 
   cetz.canvas({
     draw(

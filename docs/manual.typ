@@ -275,7 +275,7 @@ Note that I am not a linguist, so these analyses may be wrong. There are intende
 == Sphinx of Black Quartz
 #example(```typ
 #tree(
-  dense: false
+  style: (fit: "band")
 )[TP
   [NP
     [N [Sphinx]]
@@ -366,4 +366,11 @@ Note that I am not a linguist, so these analyses may be wrong. There are intende
     sentence
   )
 )
+```)
+
+== Deep Sentence
+
+
+#example(```typ
+#tree(style: (padding: 0.01), vertical-gap: 0.1cm)[1[2[3[4[5[6[7[8[9[10[11[12[13[14[15[16[17[18[19[20[21[22[23[24[25]]]]]]]]]]]]]]]]]]]]]]]]]
 ```)
