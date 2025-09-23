@@ -6,10 +6,18 @@ A library for producing beautiful syntax tree graphs.
 
 This package requires typst 0.13
 
-To use this package, simply add the following code to your document:
+To use this package, add the following code:
 
 ```typ
-#import "@preview/arborly:0.3.1": tree
+#tree[
+  // Tree goes here
+]
+```
+
+Example:
+
+```typ
+#import "@preview/arborly:0.3.2": tree
 
 #tree[TP
   [NP
@@ -24,6 +32,7 @@ To use this package, simply add the following code to your document:
   ]
 ]
 ```
+![example](https://raw.githubusercontent.com/pearcebasmanm/arborly/main/docs/example.png)
 
 For more details and examples, see `docs/manual.pdf` in the github repository.
 

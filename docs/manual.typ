@@ -198,7 +198,7 @@ These are equivalent to the named arguments of the ```typc text``` function, whi
 ```)
 This is very verbose, especially when used for several nodes. So the provided parameter (used on for the right branch of this tree) is exposed (and as usual can be inherited if specified).
 
-However a similar option is not exposed for all elements that support `set`, so this is a useful trick to know. 
+However a similar option is not exposed for all elements that support `set`, so this is a useful trick to know.
 
 #pagebreak()
 === Padding
