@@ -348,7 +348,7 @@ let draw(
     // START OF ACTUAL IMPLEMENTATION
     let name = if style.name != none { style.name } else { name }
     cetz.draw.content(
-      (offset.cm(), y), 
+      (offset.to-absolute().cm(), y), 
       body,
       padding: style.padding,
       name: name,
@@ -368,7 +368,7 @@ let draw(
 
       let line-style = merge-dictionary(style.child-lines, child.style.parent-line)
     
-      let child-y = y - snapped-height.cm() - vertical-gap.cm()
+      let child-y = y - snapped-height.cm() - vertical-gap.to-absolute().cm()
       // let child-y = y - snapped-height.cm()
       let child-name = if child.style.name != none { child.style.name } else { name + "-" + str(i) }
     
@@ -424,11 +424,11 @@ let tree(
   /// The vertical gap between nodes
   ///
   /// -> length
-  vertical-gap: 8mm,
+  vertical-gap: 2.061818em,
   /// The horizontal gap between nodes
   ///
   /// -> length
-  horizontal-gap: 7mm,
+  horizontal-gap: 1.803636em,
   /// A code block to be inserted into the cetz canvas after the syntax tree. It can be used for drawing arrows between nodes. Remember to name nodes using ```typ #a``` in order to reference them. See Styling and Arguments for more.
   /// 
   code: none,
