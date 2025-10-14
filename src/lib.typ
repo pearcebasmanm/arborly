@@ -188,7 +188,7 @@
     let max-sep = 0pt
     while left.len() > 0 and right.len() > 0 {
       let sep = (left.last().body-width + right.first().body-width) / 2 + (left.last().offset - right.first().offset)
-      if sep > max-sep {
+      if sep.to-absolute() > max-sep.to-absolute() {
         max-sep = sep
       }
       let new-left = ()
@@ -237,7 +237,7 @@
         for (i, window) in children.windows(n).enumerate() {
           let current-sep = seps.slice(i, i + n - 1).sum()
           let calculated-sep = pair-offset(window.first(), window.last())
-          if current-sep < calculated-sep {
+          if current-sep.to-absolute() < calculated-sep {
             let amortized-difference = (calculated-sep - current-sep) / (n - 1)
             for j in range(i, i + n - 1) {
               seps.at(j) += amortized-difference
@@ -273,7 +273,7 @@
         let left-chunk = calc.max(body-width / 2, child-width - right-chunk)
         left-chunk + right-chunk
       } else {
-        calc.max(body-width, child-width)
+        calc.max(body-width.to-absolute(), child-width.to-absolute())
       }
 
       if children.len() == 0 {
@@ -352,7 +352,7 @@
       // START OF ACTUAL IMPLEMENTATION
       let name = if style.name != none { style.name } else { name }
       cetz.draw.content(
-        (offset.cm(), y),
+        (offset.to-absolute().cm(), y),
         body,
         padding: style.padding,
         name: name,
@@ -364,7 +364,7 @@
         // Calculate the offset
         let DEFAULT_HEIGHT = measure([dj]).height
         let average-height = (body-height + child.body-height) / 2
-        let snapped-height = if calc.abs(DEFAULT_HEIGHT - average-height) <= vertical-snapping-threshold {
+        let snapped-height = if calc.abs(DEFAULT_HEIGHT - average-height) <= vertical-snapping-threshold.to-absolute() {
           DEFAULT_HEIGHT
         } else {
           average-height
@@ -372,7 +372,7 @@
 
         let line-style = merge-dictionary(style.child-lines, child.style.parent-line)
 
-        let child-y = y - snapped-height.cm() - vertical-gap.cm()
+        let child-y = y - snapped-height.cm() - vertical-gap.to-absolute().cm()
         // let child-y = y - snapped-height.cm()
         let child-name = if child.style.name != none { child.style.name } else { name + "-" + str(i) }
 
@@ -428,15 +428,15 @@
     /// This is not useful if most nodes are significantly larger than simple text (eg. being surrounded by `rect`).
     ///
     /// -> length
-    vertical-snapping-threshold: 2pt,
+    vertical-snapping-threshold: 0.5em,
     /// The vertical gap between nodes
     ///
     /// -> length
-    vertical-gap: 8mm,
+    vertical-gap: 2em,
     /// The horizontal gap between nodes
     ///
     /// -> length
-    horizontal-gap: 7mm,
+    horizontal-gap: 1.75em,
     /// A code block to be inserted into the cetz canvas after the syntax tree. It can be used for drawing arrows between nodes. Remember to name nodes using ```typ #a``` in order to reference them. See Styling and Arguments for more.
     ///
     code: none,
