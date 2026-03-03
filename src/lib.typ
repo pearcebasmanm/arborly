@@ -237,7 +237,7 @@
         for (i, window) in children.windows(n).enumerate() {
           let current-sep = seps.slice(i, i + n - 1).sum()
           let calculated-sep = pair-offset(window.first(), window.last())
-          if current-sep.to-absolute() < calculated-sep {
+          if current-sep.to-absolute() < calculated-sep.to-absolute() {
             let amortized-difference = (calculated-sep - current-sep) / (n - 1)
             for j in range(i, i + n - 1) {
               seps.at(j) += amortized-difference
