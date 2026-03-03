@@ -17,7 +17,7 @@ To use this package, add the following code:
 Example:
 
 ```typ
-#import "@preview/arborly:0.3.2": tree
+#import "@preview/arborly:0.3.3": tree
 
 #tree[TP
   [NP
