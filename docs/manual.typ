@@ -88,8 +88,8 @@ It is also possible to specify both node-specific and inherited styles at the sa
 
 This is the set of default attributes. They are used when a style is not specified for a node or inherited from any of its ancestors.
 
-#import "../src/defaults.typ"
-#raw(lang: "typc", repr(defaults.default-style))
+#import "../src/style.typ": DEFAULT_STYLE
+#raw(lang: "typc", repr(DEFAULT_STYLE))
 
 
 == Effects
@@ -225,7 +225,7 @@ This is used as the name for cetz.draw.content if it is set to a non-```typc non
 
 #example(```typ
 #let arrow = {
-  import "@preview/cetz:0.3.4"
+  import "@preview/cetz:0.4.2"
   cetz.draw.set-style(mark: (end: ">"))
   cetz.draw.bezier(
     "bee.south", "see.south",
