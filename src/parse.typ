@@ -29,8 +29,8 @@
 /// (
 ///   body: [A],
 ///   children: (
-///     (body: [B], children: (), style: (:),
-///     (body: [C], children: (), style: (:),
+///     (body: [B], children: (), style: (:)),
+///     (body: [C], children: (), style: (:)),
 ///   ),
 ///   style: (:),
 /// )
